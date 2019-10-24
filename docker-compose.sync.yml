@@ -1,0 +1,96 @@
+version: '3.2'
+
+services:
+
+  nginx:
+    image: nginx:alpine
+    container_name: ${NGINX_NAME}
+    ports:
+      - "${NGINX_HTTP_PORT}:80"
+      - "${NGINX_8080}:8080"
+      - "${NGINX_HTTPS_PORT}:443"
+    volumes:
+      - ${WORKSPACES}:/var/www/html/:rw,cached
+      - ./conf/nginx/conf.d:/etc/nginx/conf.d/:ro,cached
+      - ./conf/nginx/nginx.conf:/etc/nginx/nginx.conf:ro,cached
+      - ./log/nginx/:/var/log/nginx/:rw,cached
+    links:
+      - php73:php73
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      docker_net:
+        ipv4_address: ${NGINX_IP}
+    depends_on:
+        - php73
+    restart: on-failure
+
+  php73:
+    build: ./php/php73/
+    container_name: ${PHP_NAME}
+    expose:
+      - "9000"
+    volumes:
+      - ${WORKSPACES}:/var/www/html/:rw,cached
+      - ./conf/php/php73.ini:/usr/local/etc/php/php.ini:ro,cached
+      - ./conf/php/php-fpm.d/www73.conf:/usr/local/etc/php-fpm.d/www.conf:rw,cached
+      - ./log/php-fpm/:/var/log/php-fpm/:rw,cached
+    links:
+      - mysql:mysql
+      - redis:redis
+    networks:
+      docker_net:
+        ipv4_address: ${PHP73_IP}
+    restart: on-failure
+
+  mysql:
+    image: mysql:5.7
+    container_name: ${MYSQL_NAME}
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - ./conf/mysql/my.cnf:/etc/mysql/my.cnf:ro,cached
+      - ./mysql/:/var/lib/mysql/:rw,cached
+      - ./log/mysql/:/var/log/mysql/:rw,cached
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DB}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      docker_net:
+        ipv4_address: ${MYSQL_IP}
+    restart: on-failure
+
+  redis:
+    image: redis:latest
+    container_name: ${REDIS_NAME}
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      docker_net:
+        ipv4_address: ${REDIS_IP}
+    restart: on-failure
+  
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: ${PHPMYADMIN_NAME}
+    ports:
+      - "${PHPMYADMIN_PORT}:80"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      PMA_HOST: ${MYSQL_IP}
+      PMA_PORT: 3306
+    networks:
+      docker_net:
+        ipv4_address: ${PHPMYADMIN_IP}
+    depends_on:
+      - mysql
+    restart: on-failure
+
+networks:
+  docker_net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        -
+          subnet: "${DOCKER_SUBNET}"
